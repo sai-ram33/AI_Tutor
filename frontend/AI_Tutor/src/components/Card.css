@@ -1,0 +1,27 @@
+.card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #d1d5db;
+}
+
+.card-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.card-body {
+  padding: 24px;
+}
+
+.card-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-main);
+}

@@ -1,0 +1,112 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-main);
+}
+
+.auth-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: var(--max-width-card);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-2xl);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.auth-logo {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-lg);
+}
+
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.password-field-wrapper {
+  position: relative;
+}
+
+.forgot-password-link {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: 0.8125rem;
+  color: var(--color-accent-primary);
+  text-align: right;
+}
+
+.forgot-password-link:hover {
+  text-decoration: underline;
+}
+
+.auth-submit-error {
+  padding: var(--space-sm) var(--space-md);
+  background-color: rgba(214, 69, 69, 0.1);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.auth-footer {
+  margin-top: var(--space-xl);
+  text-align: center;
+}
+
+.auth-footer p {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+}
+
+.auth-link {
+  font-weight: 500;
+  color: var(--color-accent-primary);
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+/* Google Icon */
+.google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: var(--space-xl) var(--space-lg);
+  }
+}

@@ -1,0 +1,246 @@
+.message-input-container {
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* Main pill container - replaces segmented control + separate textarea + separate Send button */
+.input-pill {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background-color: var(--color-bg-card);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input-pill:focus-within {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(46, 125, 107, 0.15);
+}
+
+/* Top row - textarea only, borderless, transparent */
+.input-main {
+  width: 100%;
+}
+
+.message-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 200px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.message-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.message-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Bottom row inside the pill */
+.input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.input-footer-left,
+.input-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.input-footer-right {
+  gap: var(--space-xs);
+}
+
+/* Action buttons (attachment, mic, waveform) */
+.input-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-main);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.input-action-btn:hover:not(.disabled) {
+  background-color: var(--color-highlight-bg);
+  color: var(--color-accent-primary);
+}
+
+.input-action-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.input-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.input-action-btn.disabled:hover {
+  background-color: var(--color-bg-main);
+  color: var(--color-text-muted);
+}
+
+/* Mode dropdown - replaces segmented control */
+.mode-dropdown {
+  position: relative;
+}
+
+.mode-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-main);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.mode-dropdown-trigger:hover {
+  background-color: var(--color-highlight-bg);
+  color: var(--color-accent-primary);
+}
+
+.mode-dropdown-trigger:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.mode-dropdown-chevron {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.mode-dropdown[aria-expanded="true"] .mode-dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.mode-dropdown-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: var(--space-xs);
+  min-width: 140px;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: var(--z-dropdown);
+  animation: fadeIn 0.15s ease;
+}
+
+.mode-dropdown-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.mode-dropdown-item:hover {
+  background-color: var(--color-bg-main);
+}
+
+.mode-dropdown-item.active {
+  color: var(--color-accent-primary);
+  background-color: var(--color-highlight-bg);
+}
+
+.mode-dropdown-item:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+
+/* Send button - circular icon button with accent color */
+.send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent-primary);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.send-btn:hover:not(:disabled) {
+  background-color: #246354;
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.send-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .input-pill {
+    border-radius: 16px;
+    padding: 10px 12px;
+  }
+
+  .input-footer {
+    gap: var(--space-xs);
+  }
+
+  .mode-dropdown-trigger span {
+    display: none;
+  }
+
+  .mode-dropdown-trigger {
+    padding: var(--space-xs);
+  }
+}
