@@ -1,162 +1,137 @@
 import { config } from '../config/env.js';
+import { mistralService } from './ai/mistral/mistralService.js';
+import { qwenClient } from './ai/qwen/qwenClient.js';
 
 export const aiService = {
   /**
-   * Generates a pedagogical AI response adapted for mode, level, and action.
+   * Generates a pedagogical AI response adapted for mode, level, and action using Mistral AI.
    * @param {Object} params
    * @param {Array} params.history - Array of recent conversation messages
    * @param {string} params.newMessage - The student's current message
    * @param {string} params.userLevel - 'beginner' | 'intermediate' | 'advanced'
    * @param {string} params.mode - 'explain' | 'guide'
-   * @param {string} [params.action] - 'generate_practice' | 'simplify' | null
-   * @returns {Promise<string>} Formatted HTML or Markdown explanation
+   * @param {string} [params.action] - 'generate_practice' | 'simplify' | 'recap' | null
+   * @returns {Promise<{content: string, suggestedNextPrompt: string}>} Generated explanation and follow-up prompt
    */
   async getExplanation({ history = [], newMessage, userLevel = 'beginner', mode = 'explain', action = null }) {
-    try {
-      // If an external AI API key is configured (Gemini / OpenAI / Custom)
-      if (config.aiApiKey) {
-        const externalResponse = await this.callExternalLLM({
+    // 1. Check if Mistral AI is configured
+    if (config.mistralApiKey) {
+      try {
+        if (action === 'recap' || this.isRecapIntent(newMessage)) {
+          return await mistralService.generateRecap({ history });
+        }
+
+        return await mistralService.generateResponse({
           history,
           newMessage,
           userLevel,
           mode,
           action,
         });
-        if (externalResponse) return externalResponse;
+      } catch (err) {
+        console.error('[AI Service Error]:', err.message);
+        if (err.statusCode) {
+          throw err;
+        }
       }
-
-      // Intelligent built-in pedagogical tutor generator (fallback)
-      return this.generateTutorResponse({ history, newMessage, userLevel, mode, action });
-    } catch (err) {
-      console.error('[AI Service Error]:', err.message);
-      throw new Error("Couldn't reach AI Teacher, please try again");
     }
+
+    // 2. Intelligent built-in pedagogical tutor generator (fallback when key is missing or offline)
+    console.log('[AI Service] Using built-in tutor generator fallback');
+    const content = this.generateTutorResponse({ history, newMessage, userLevel, mode, action });
+    const suggestedNextPrompt = mode === 'guide'
+      ? 'Would you like to try walking through the first step?'
+      : 'Would you like to explore a practice question or a simpler analogy?';
+
+    return {
+      content,
+      suggestedNextPrompt,
+    };
   },
 
   /**
-   * Calls Google Gemini or OpenAI compatible LLM endpoints when API Key is set
+   * Explains an uploaded image and user prompt using Qwen2.5-VL-3B-Instruct
+   * @param {Object} params
+   * @param {Buffer} [params.imageBuffer] - Uploaded image binary buffer
+   * @param {string} [params.imageMimetype] - Uploaded image mime type
+   * @param {string} [params.imageOriginalName] - Original image filename
+   * @param {string} params.message - Student prompt / instruction
+   * @param {Array} [params.history] - Prior conversation messages
+   * @param {string} [params.userLevel] - Student proficiency level
+   * @param {string} [params.mode] - 'explain' | 'guide'
+   * @returns {Promise<{success: boolean, model: string, response: string, device: string}>}
    */
-  async callExternalLLM({ history, newMessage, userLevel, mode, action }) {
-    try {
-      const systemPrompt = this.buildSystemPrompt(userLevel, mode, action);
-      
-      // Default to Google Gemini 1.5/2.0 API endpoint if key provided
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${config.aiApiKey}`;
-      
-      const contents = [];
-      
-      // Add context history
-      history.forEach((m) => {
-        contents.push({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.content.replace(/<[^>]*>/g, '') }],
-        });
-      });
-
-      // Add user message
-      let promptText = newMessage;
-      if (action === 'generate_practice') {
-        promptText = `[Action: Generate 3 practice quiz questions based on our previous topic] ${newMessage}`;
-      } else if (action === 'simplify') {
-        promptText = `[Action: Explain simpler with an everyday analogy] ${newMessage}`;
-      }
-
-      contents.push({
-        role: 'user',
-        parts: [{ text: promptText }],
-      });
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          systemInstruction: {
-            parts: [{ text: systemPrompt }],
-          },
-          generationConfig: {
-            temperature: mode === 'guide' ? 0.6 : 0.4,
-            maxOutputTokens: 1024,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        console.warn('External AI API returned status:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (rawText) {
-        return this.formatAiHtml(rawText);
-      }
-      return null;
-    } catch (err) {
-      console.warn('External AI call failed, using built-in engine:', err.message);
-      return null;
-    }
-  },
-
-  buildSystemPrompt(level, mode, action) {
-    let modeInstruction = '';
-    if (mode === 'guide') {
-      modeInstruction = `
-- Mode: "guide" (Socratic Method).
-- Do NOT give the answer or solution directly.
-- Ask the student 1-2 intuitive, leading questions that nudge them toward deriving the answer themselves.
-- Acknowledge what they got right, and guide their intuition step-by-step.`;
-    } else {
-      modeInstruction = `
-- Mode: "explain" (Direct & Analogical).
-- Give a full, step-by-step intuitive breakdown directly.
-- Use relatable real-world analogies, code snippets or formulas where applicable, followed by common pitfalls.`;
-    }
-
-    let actionInstruction = '';
-    if (action === 'generate_practice') {
-      actionInstruction = `
-- Action: "generate_practice".
-- Generate 3 distinct, high-yield practice quiz questions based on the topic discussed.
-- Format with numbered list (1, 2, 3) with varying difficulty.`;
-    } else if (action === 'simplify') {
-      actionInstruction = `
-- Action: "simplify".
-- The student requested an ultra-simple explanation.
-- Explain the concept using a completely plain everyday analogy (like cooking, traffic, or games) with zero technical jargon.`;
-    }
-
-    return `You are an expert AI Teacher. A student (${level} learning level) is asking a question.
-Teaching Rules:
-1. Begin with an intuitive 1-sentence definition.
-2. Explain WHY this concept exists and what problem it solves.
-3. Provide a vivid analogy suitable for a ${level} student.
-4. Show a clean example or code block.
-5. Highlight critical terms in <span class="highlight-term">term</span> HTML tags.
-${modeInstruction}
-${actionInstruction}`;
-  },
-
-  formatAiHtml(text) {
-    // Basic markdown to HTML formatting for clean rendering
-    let formatted = text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.trim()}</code></pre>`)
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Wrap paragraphs if not already wrapped
-    if (!formatted.startsWith('<p>') && !formatted.startsWith('<pre>')) {
-      const paragraphs = formatted.split('\n\n').filter(Boolean);
-      formatted = paragraphs.map((p) => (p.startsWith('<') ? p : `<p>${p}</p>`)).join('');
-    }
-
-    return formatted;
+  async explainImage({
+    imageBuffer,
+    imageMimetype,
+    imageOriginalName,
+    message,
+    history = [],
+    userLevel = 'beginner',
+    mode = 'explain',
+  }) {
+    return await qwenClient.generate({
+      imageBuffer,
+      imageMimetype,
+      imageOriginalName,
+      message,
+      history,
+      userLevel,
+      mode,
+    });
   },
 
   /**
-   * Built-in intelligent pedagogical response generator for seamless local execution
+   * Health check for Qwen Vision microservice
+   */
+  async checkVisionHealth() {
+    return await qwenClient.checkHealth();
+  },
+
+  /**
+   * Generates an educational recap of the conversation history.
+   * @param {Object} params
+   * @param {Array} params.history - Array of conversation messages
+   * @returns {Promise<{content: string, suggestedNextPrompt: string}>}
+   */
+  async getRecap({ history = [] }) {
+    if (config.mistralApiKey) {
+      try {
+        return await mistralService.generateRecap({ history });
+      } catch (err) {
+        console.error('[AI Service Recap Error]:', err.message);
+        if (err.statusCode) throw err;
+      }
+    }
+
+    return {
+      content: this.generateFallbackRecap(history),
+      suggestedNextPrompt: 'What topic would you like to explore next?',
+    };
+  },
+
+  /**
+   * Detects if the student is asking for a summary/recap of the conversation
+   */
+  isRecapIntent(message = '') {
+    const q = message.toLowerCase().trim();
+    const recapPhrases = [
+      'summarize our conversation',
+      'summarize the conversation',
+      'give me a recap',
+      'recap our conversation',
+      'recap what we discussed',
+      'recap',
+      'summary of our conversation',
+      'what did we discuss',
+      'summarize what we discussed',
+      'give me a summary',
+    ];
+    return recapPhrases.some((phrase) => q.includes(phrase)) || q === 'summarize' || q === 'recap';
+  },
+
+  /**
+   * Built-in intelligent pedagogical response generator for seamless local execution/fallback
    */
   generateTutorResponse({ history, newMessage, userLevel, mode, action }) {
     const q = newMessage.toLowerCase();
@@ -177,57 +152,15 @@ ${actionInstruction}`;
 <p>You don't need to worry about complex technical details — as long as you follow the steps one by one, you get the right result every time.</p>`;
     }
 
-    // Keyword based pedagogical breakdowns
-    if (q.includes('function') || q.includes('def ')) {
-      if (mode === 'guide') {
-        return `${prefix}<p>Think about a recipe card in a kitchen. You write the recipe once, and you can make that meal whenever you need it.</p>
-<p><em>In Python, why do you think we use parameters inside <code>def function_name(parameter):</code>? What advantage does that give over hard-coding numbers?</em></p>`;
-      }
-      return `${prefix}<p>A <span class="highlight-term">function</span> in Python is a reusable, named block of code that carries out a specific task. You define it once using <code>def</code>, and invoke it whenever needed.</p>
-<pre><code>def calculate_total(price, tax_rate=0.05):
-    """Calculates final price with sales tax."""
-    return price * (1 + tax_rate)
-
-# Calling our function
-total = calculate_total(100) # Output: 105.0</code></pre>
-<p><strong>Why use functions?</strong></p>
-<ul>
-  <li><strong>DRY Principle:</strong> Write code once, reuse it everywhere without copy-pasting.</li>
-  <li><strong>Modularity:</strong> Breaks complex systems into small, testable units.</li>
-</ul>`;
+    if (q.includes('photosynthesis')) {
+      return `${prefix}<p><strong>Photosynthesis</strong> is the biological process by which green plants, algae, and some bacteria convert light energy (usually from the Sun) into chemical energy stored in glucose.</p>
+<p><strong>Equation:</strong> 6CO₂ + 6H₂O + Light Energy → C₆H₁₂O₆ + 6O₂</p>
+<p>Sunlight provides the energetic activation to split water molecules and fix carbon dioxide into nourishing sugars.</p>`;
     }
 
-    if (q.includes('recursion') || q.includes('recursive')) {
-      if (mode === 'guide') {
-        return `${prefix}<p>Imagine you have a stack of 5 nested boxes. To reach the prize in the smallest box, what action must you repeat for each box?</p>
-<p><em>What happens if you forget to include a rule for what to do when you reach the final box (the <span class="highlight-term">base case</span>)?</em></p>`;
-      }
-      return `${prefix}<p><span class="highlight-term">Recursion</span> is a problem-solving technique where a function solves a problem by calling smaller instances of itself.</p>
-<p>Every recursive algorithm requires two fundamental components:</p>
-<ol>
-  <li><strong>Base Case:</strong> The stopping condition that returns immediately without further recursive calls.</li>
-  <li><strong>Recursive Case:</strong> The step where the problem is reduced and the function calls itself.</li>
-</ol>
-<pre><code>def countdown(n):
-    if n <= 0: # Base case
-        print("Blast off! 🚀")
-        return
-    print(n)
-    countdown(n - 1) # Recursive case</code></pre>`;
-    }
-
-    if (q.includes('quantum') || q.includes('entangle')) {
-      return `${prefix}<p><span class="highlight-term">Quantum Entanglement</span> is a phenomenon where two or more particles become interconnected such that measuring the quantum state of one instantly reveals the state of the other, regardless of distance.</p>
-<p><strong>The Shoe Box Analogy:</strong> Suppose you put one left shoe and one right shoe into two identical sealed boxes. If you open one box in New York and find a left shoe, you instantly know the box in Tokyo contains the right shoe.</p>`;
-    }
-
-    if (q.includes('gps') || q.includes('satellite')) {
-      if (mode === 'guide') {
-        return `${prefix}<p>If 1 satellite tells you you are 20,000 km away, you could be anywhere on a huge sphere. If a 2nd satellite also gives you its distance, those two spheres overlap in a circle.</p>
-<p><em>How many total satellites do you think we need to pinpoint your exact 3D location (latitude, longitude, and altitude)?</em></p>`;
-      }
-      return `${prefix}<p><span class="highlight-term">GPS (Global Positioning System)</span> uses <strong>trilateration</strong> with signals transmitted from a constellation of 24+ orbiting satellites to determine your exact coordinates on Earth.</p>
-<p>By measuring the precise time it takes radio signals to travel from at least 4 satellites, your receiver calculates the exact intersection point.</p>`;
+    if (q.includes('sunlight') && (history || []).some(m => (m.content || '').toLowerCase().includes('photosynthesis'))) {
+      return `${prefix}<p>Sunlight is critical because it powers the <strong>light-dependent reactions</strong> in the thylakoid membranes of chloroplasts.</p>
+<p>Without sunlight, chlorophyll cannot energize electrons to generate ATP and NADPH, which means the plant cannot synthesize glucose.</p>`;
     }
 
     // Default pedagogical response
@@ -237,7 +170,23 @@ total = calculate_total(100) # Output: 105.0</code></pre>
     }
 
     return `<p>Here is a structured explanation for <strong>"${newMessage}"</strong> tailored to your ${userLevel} level:</p>
-<p>The core concept begins with understanding the primary objective: breaking down complex behavior into simple, predictable building blocks.</p>
-<p>Feel free to click <strong>"Practice Quiz"</strong> below to test your understanding or <strong>"Explain Simpler"</strong> for a fresh analogy.</p>`;
+<p>The core concept begins with understanding the primary objective: breaking down complex behavior into simple, predictable building blocks.</p>`;
+  },
+
+  /**
+   * Generates a fallback recap if offline
+   */
+  generateFallbackRecap(history = []) {
+    if (!history || history.length === 0) {
+      return 'No previous conversation history found to summarize.';
+    }
+    const topics = history
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content.replace(/<[^>]*>/g, '').trim())
+      .slice(-5);
+
+    return `### Conversation Summary
+- **Topics Explored:** ${topics.join(', ') || 'General Concepts'}
+- **Focus:** Building foundational understanding and clarifying key questions.`;
   },
 };
