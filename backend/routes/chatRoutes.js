@@ -7,5 +7,6 @@ const router = Router();
 router.use(authMiddleware);
 
 router.post('/', chatController.sendMessage);
+router.get('/:conversationId/recap', chatController.getRecap);
 
 export default router;

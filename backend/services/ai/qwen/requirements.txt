@@ -1,0 +1,9 @@
+torch>=2.2.0
+torchvision>=0.17.0
+transformers>=4.48.0
+qwen-vl-utils>=0.0.8
+accelerate>=0.26.0
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.9
+pillow>=10.0.0
