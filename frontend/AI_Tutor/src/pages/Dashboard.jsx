@@ -249,6 +249,14 @@ export function Dashboard() {
           console.warn('Backend sync note:', err.message);
         }
       }
+
+      // Check for pending question from Landing / Signup
+      const pendingQ = sessionStorage.getItem('pendingQuestion');
+      if (pendingQ) {
+        sessionStorage.removeItem('pendingQuestion');
+        setInputValue(pendingQ);
+        setTimeout(() => textareaRef.current?.focus(), 150);
+      }
     }
     loadServerData();
   }, []);
@@ -338,7 +346,7 @@ export function Dashboard() {
     setOpenMenuId(null);
   };
 
-  const handleDeleteConversation = (e, id) => {
+  const handleDeleteConversation = async (e, id) => {
     e.stopPropagation();
     setOpenMenuId(null);
     if (window.confirm('Delete this conversation?')) {
@@ -346,6 +354,13 @@ export function Dashboard() {
       if (activeConversationId === id) {
         const remaining = conversations.filter((c) => c.id !== id);
         setActiveConversationId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      if (api.isAuthenticated() && !isNaN(Number(id))) {
+        try {
+          await api.deleteConversation(id);
+        } catch (err) {
+          console.warn('Backend delete sync error:', err.message);
+        }
       }
     }
   };
@@ -357,7 +372,7 @@ export function Dashboard() {
     setOpenMenuId(null);
   };
 
-  const handleSaveRename = (id) => {
+  const handleSaveRename = async (id) => {
     const trimmed = editTitle.trim();
     if (trimmed) {
       setConversations((prev) =>
@@ -365,6 +380,13 @@ export function Dashboard() {
           c.id === id ? { ...c, title: trimmed, updatedAt: new Date().toISOString() } : c
         )
       );
+      if (api.isAuthenticated() && !isNaN(Number(id))) {
+        try {
+          await api.renameConversation(id, trimmed);
+        } catch (err) {
+          console.warn('Backend rename sync error:', err.message);
+        }
+      }
     }
     setEditingConversationId(null);
     setEditTitle('');
@@ -492,9 +514,53 @@ result = square(4) # 16</code></pre>`;
       )
     );
 
-    // Simulate AI generation delay
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    try {
+      if (api.isAuthenticated()) {
+        const isNumericId = !isNaN(Number(targetConvId)) && Number(targetConvId) > 0;
+        const result = await api.sendMessage({
+          conversationId: isNumericId ? Number(targetConvId) : undefined,
+          message: userText,
+          mode: responseMode,
+        });
 
+        if (result && result.aiMessage) {
+          const realConvId = String(result.conversationId || targetConvId);
+          const aiMsg = {
+            id: String(result.aiMessage.id || Date.now() + 1),
+            role: 'assistant',
+            mode: result.aiMessage.mode || responseMode,
+            content: result.aiMessage.content,
+            timestamp: result.aiMessage.created_at || new Date().toISOString(),
+            metadata: { originalQuestion: userText },
+          };
+
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === targetConvId
+                ? {
+                    ...c,
+                    id: realConvId,
+                    updatedAt: new Date().toISOString(),
+                    messages: [...c.messages, aiMsg],
+                  }
+                : c
+            )
+          );
+
+          if (realConvId !== targetConvId) {
+            setActiveConversationId(realConvId);
+          }
+
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend chat API note (using built-in generator):', err.message);
+    }
+
+    // Resilient fallback generator
+    await new Promise((resolve) => setTimeout(resolve, 800));
     const aiMessage = generateAIResponse(userText, responseMode);
 
     setConversations((prev) =>
@@ -516,7 +582,41 @@ result = square(4) # 16</code></pre>`;
     if (isLoading || !originalQuestion) return;
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      if (api.isAuthenticated() && !isNaN(Number(activeConversationId))) {
+        const result = await api.sendMessage({
+          conversationId: Number(activeConversationId),
+          message: `Explain simpler: ${originalQuestion}`,
+          mode: 'explain',
+          action: 'simplify',
+        });
+
+        if (result && result.aiMessage) {
+          const simplerMessage = {
+            id: String(result.aiMessage.id || Date.now() + 1),
+            role: 'assistant',
+            mode: 'explain',
+            content: result.aiMessage.content,
+            timestamp: result.aiMessage.created_at || new Date().toISOString(),
+            metadata: { originalQuestion },
+          };
+
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeConversationId
+                ? { ...c, updatedAt: new Date().toISOString(), messages: [...c.messages, simplerMessage] }
+                : c
+            )
+          );
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend explain simpler note:', err.message);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
     const simplerMessage = {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + 1),
@@ -543,7 +643,41 @@ result = square(4) # 16</code></pre>`;
     if (isLoading || !originalQuestion) return;
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      if (api.isAuthenticated() && !isNaN(Number(activeConversationId))) {
+        const result = await api.sendMessage({
+          conversationId: Number(activeConversationId),
+          message: `Practice quiz for: ${originalQuestion}`,
+          mode: 'explain',
+          action: 'generate_practice',
+        });
+
+        if (result && result.aiMessage) {
+          const quizMessage = {
+            id: String(result.aiMessage.id || Date.now() + 1),
+            role: 'assistant',
+            mode: 'explain',
+            content: result.aiMessage.content,
+            timestamp: result.aiMessage.created_at || new Date().toISOString(),
+            metadata: { originalQuestion },
+          };
+
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeConversationId
+                ? { ...c, updatedAt: new Date().toISOString(), messages: [...c.messages, quizMessage] }
+                : c
+            )
+          );
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend practice quiz note:', err.message);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
     const quizMessage = {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + 1),
@@ -731,10 +865,12 @@ result = square(4) # 16</code></pre>`;
         {/* Sidebar Footer User Card */}
         <div className="sidebar-footer">
           <div className="user-profile-pill" onClick={() => navigate('/profile')}>
-            <Avatar name="Sai Ram" size="sm" />
+            <Avatar name={currentUser?.name || 'User'} size="sm" />
             <div className="user-info">
-              <span className="user-name">Sai Ram</span>
-              <span className="user-tier">Intermediate • Free</span>
+              <span className="user-name">{currentUser?.name || 'Learner'}</span>
+              <span className="user-tier">
+                {currentUser?.level ? currentUser.level.charAt(0).toUpperCase() + currentUser.level.slice(1) : 'Beginner'} • Free
+              </span>
             </div>
           </div>
           <ThemeToggle className="sidebar-theme-toggle" />
@@ -787,7 +923,7 @@ result = square(4) # 16</code></pre>`;
               <span>{responseMode === 'guide' ? '💡 Guide Mode' : '🎓 Explain Mode'}</span>
             </div>
             <Link to="/profile" className="header-avatar-link" title="Your profile">
-              <Avatar name="Sai Ram" size="sm" />
+              <Avatar name={currentUser?.name || 'User'} size="sm" />
             </Link>
           </div>
         </header>
@@ -812,7 +948,7 @@ result = square(4) # 16</code></pre>`;
                         {isAssistant ? (
                           <div className="ai-message-avatar">✦</div>
                         ) : (
-                          <Avatar name="Sai Ram" size="sm" />
+                          <Avatar name={currentUser?.name || 'You'} size="sm" />
                         )}
                       </div>
 
@@ -923,7 +1059,7 @@ result = square(4) # 16</code></pre>`;
               <div className="empty-greeting-container">
                 <div className="empty-sparkle-icon">✦</div>
                 <h1 className="empty-greeting-title">
-                  {getTimeGreeting()}, <span className="greeting-name">Sai Ram</span>
+                  {getTimeGreeting()}, <span className="greeting-name">{currentUser?.name || 'Learner'}</span>
                 </h1>
                 <p className="empty-greeting-subtitle">
                   What concept, question, or challenge would you like to master today?

@@ -139,17 +139,21 @@ ${actionInstruction}`;
   },
 
   formatAiHtml(text) {
+    if (!text) return '';
     // Basic markdown to HTML formatting for clean rendering
     let formatted = text
+      .replace(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g, (match, code) => `<pre><code>${code.trim()}</code></pre>`)
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.trim()}</code></pre>`)
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>');
 
     // Wrap paragraphs if not already wrapped
-    if (!formatted.startsWith('<p>') && !formatted.startsWith('<pre>')) {
-      const paragraphs = formatted.split('\n\n').filter(Boolean);
-      formatted = paragraphs.map((p) => (p.startsWith('<') ? p : `<p>${p}</p>`)).join('');
+    if (!formatted.startsWith('<p>') && !formatted.startsWith('<pre>') && !formatted.startsWith('<h')) {
+      const paragraphs = formatted.split(/\n\n+/).filter(Boolean);
+      formatted = paragraphs.map((p) => (p.startsWith('<') ? p : `<p>${p.replace(/\n/g, '<br/>')}</p>`)).join('');
     }
 
     return formatted;

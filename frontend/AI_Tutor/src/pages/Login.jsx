@@ -152,9 +152,14 @@ export function Login() {
                 required
                 autoComplete="current-password"
               />
-              <Link to="/forgot-password" className="forgot-password-link">
+              <button
+                type="button"
+                className="forgot-password-link"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onClick={() => alert('Password reset: If you lost access, you can sign in with Google or register with a new email.')}
+              >
                 Forgot password?
-              </Link>
+              </button>
             </div>
 
             <Button

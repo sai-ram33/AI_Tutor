@@ -136,31 +136,31 @@ export const UserModel = {
 function calculateStreak(dates) {
   if (!dates || dates.length === 0) return 0;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const toLocalDateStr = (d) => {
+    const dt = new Date(d);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
 
+  const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  const dateStrings = dates.map((d) => {
-    const dt = new Date(d);
-    return dt.toISOString().slice(0, 10);
-  });
+  const dateStrings = new Set(dates.map((d) => toLocalDateStr(d)));
 
-  const todayStr = today.toISOString().slice(0, 10);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const todayStr = toLocalDateStr(today);
+  const yesterdayStr = toLocalDateStr(yesterday);
 
   // If neither today nor yesterday has a message, streak is broken
-  if (!dateStrings.includes(todayStr) && !dateStrings.includes(yesterdayStr)) {
+  if (!dateStrings.has(todayStr) && !dateStrings.has(yesterdayStr)) {
     return 0;
   }
 
   let streak = 0;
-  const checkDate = dateStrings.includes(todayStr) ? new Date(today) : new Date(yesterday);
+  const checkDate = dateStrings.has(todayStr) ? new Date(today) : new Date(yesterday);
 
   while (true) {
-    const checkStr = checkDate.toISOString().slice(0, 10);
-    if (dateStrings.includes(checkStr)) {
+    const checkStr = toLocalDateStr(checkDate);
+    if (dateStrings.has(checkStr)) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     } else {

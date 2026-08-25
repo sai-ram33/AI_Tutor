@@ -97,11 +97,23 @@
   text-decoration: underline;
 }
 
-/* Google Icon */
+/* Google Icon (legacy) */
 .google-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+}
+
+/* Google OAuth Button Wrapper — makes it span full width */
+.google-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.google-btn-wrapper > div,
+.google-btn-wrapper iframe {
+  width: 100% !important;
 }
 
 /* Responsive */
