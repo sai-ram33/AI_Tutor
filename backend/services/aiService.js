@@ -21,13 +21,15 @@ export const aiService = {
           return await mistralService.generateRecap({ history });
         }
 
-        return await mistralService.generateResponse({
+        const mistralResult = await mistralService.generateResponse({
           history,
           newMessage,
           userLevel,
           mode,
           action,
         });
+        
+        return mistralResult;
       } catch (err) {
         console.error('[AI Service Error]:', err.message);
         if (err.statusCode) {
@@ -61,16 +63,15 @@ export const aiService = {
    * @param {string} [params.mode] - 'explain' | 'guide'
    * @returns {Promise<{success: boolean, model: string, response: string, device: string}>}
    */
-<<<<<<< HEAD
   async callExternalLLM({ history, newMessage, userLevel, mode, action }) {
     try {
       const systemPrompt = this.buildSystemPrompt(userLevel, mode, action);
-      
+
       // Default to Google Gemini 1.5/2.0 API endpoint if key provided
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${config.aiApiKey}`;
-      
+
       const contents = [];
-      
+
       // Add context history
       history.forEach((m) => {
         contents.push({
@@ -114,7 +115,7 @@ export const aiService = {
 
       const data = await response.json();
       const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
+
       if (rawText) {
         return this.formatAiHtml(rawText);
       }
@@ -183,7 +184,8 @@ ${actionInstruction}`;
     }
 
     return formatted;
-=======
+  },
+
   async explainImage({
     imageBuffer,
     imageMimetype,
@@ -202,7 +204,6 @@ ${actionInstruction}`;
       userLevel,
       mode,
     });
->>>>>>> 8743dd2e15753c752903232b980e2a7b9bda2e11
   },
 
   /**

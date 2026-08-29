@@ -4,78 +4,17 @@ import { Avatar } from '../components/Avatar';
 import { LoadingDots } from '../components/LoadingDots';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { api } from '../services/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './Dashboard.css';
 
 const STORAGE_KEY = 'ai_tutor_conversations';
 const ACTIVE_CONV_KEY = 'ai_tutor_active_conv';
 
-const initialDefaultConversations = [
-  {
-    id: '1',
-    title: 'Python functions & scope',
-    pinned: true,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    messages: [
-      {
-        id: 'msg-1',
-        role: 'user',
-        content: 'What is a function in Python?',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      },
-      {
-        id: 'msg-2',
-        role: 'assistant',
-        mode: 'explain',
-        content: `<p>A <span class="highlight-term">function</span> in Python is a reusable, self-contained block of code that performs a specific task. You define it once using the <code>def</code> keyword and can invoke it anywhere.</p>
-<pre><code>def greet(name):
-    """Returns a friendly greeting."""
-    return f"Hello, {name}!"
-
-# Call the function
-message = greet("Sai")
-print(message)  # Output: Hello, Sai!</code></pre>
-<p><strong>Key Advantages:</strong></p>
-<ul>
-  <li><strong>DRY (Don't Repeat Yourself):</strong> Avoid duplicating logic across your codebase.</li>
-  <li><strong>Modularity:</strong> Breaks complex systems into clean, testable sub-problems.</li>
-</ul>`,
-        timestamp: new Date(Date.now() - 1000 * 60 * 29).toISOString(),
-        metadata: {
-          originalQuestion: 'What is a function in Python?',
-        },
-      },
-    ],
-  },
-  {
-    id: '2',
-    title: 'Recursion basics & call stack',
-    pinned: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    messages: [
-      {
-        id: 'msg-3',
-        role: 'user',
-        content: 'Can you explain recursion with an analogy?',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-      },
-      {
-        id: 'msg-4',
-        role: 'assistant',
-        mode: 'explain',
-        content: `<p><span class="highlight-term">Recursion</span> is like Russian nesting dolls (Matryoshka). Each doll contains a smaller version of itself inside until you open the tiniest solid doll (the <span class="highlight-term">base case</span>) that cannot be opened further.</p>
-<p>Every recursive algorithm requires two components:</p>
-<ol>
-  <li><strong>Base Case:</strong> The stopping condition that prevents infinite recursion.</li>
-  <li><strong>Recursive Case:</strong> The step where the problem is reduced to a smaller instance.</li>
-</ol>`,
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        metadata: {
-          originalQuestion: 'Can you explain recursion with an analogy?',
-        },
-      },
-    ],
-  },
-];
+const initialDefaultConversations = [];
 
 const starterPromptCards = [
   {
@@ -967,10 +906,33 @@ result = square(4) # 16</code></pre>`;
                           </time>
                         </div>
 
-                        <div
-                          className="message-prose-body"
-                          dangerouslySetInnerHTML={{ __html: message.content }}
-                        />
+                        <div className="message-prose-body">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
+                            components={{
+                              code({ node, inline, className, children, ...props }) {
+                                const match = /language-(\w+)/.exec(className || '');
+                                return !inline && match ? (
+                                  <SyntaxHighlighter
+                                    {...props}
+                                    style={vscDarkPlus}
+                                    language={match[1]}
+                                    PreTag="div"
+                                  >
+                                    {String(children).replace(/\n$/, '')}
+                                  </SyntaxHighlighter>
+                                ) : (
+                                  <code {...props} className={className}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
 
                         {/* Claude-Style Action Toolbar on Assistant Messages */}
                         {isAssistant && (
@@ -1156,9 +1118,24 @@ result = square(4) # 16</code></pre>`;
               </div>
 
               <div className="controls-right">
-                <span className="keyboard-hint-text">
-                  <span>Enter</span> to send • <span>Shift + Enter</span> for new line
-                </span>
+
+                <button type="button" className="voice-btn" title="Voice Input" aria-label="Voice Input">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                  </svg>
+                </button>
+
+                <button type="button" className="advanced-voice-btn" title="Advanced Voice" aria-label="Advanced Voice">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="6" y1="9" x2="6" y2="15"></line>
+                    <line x1="18" y1="9" x2="18" y2="15"></line>
+                    <line x1="9" y1="7" x2="9" y2="17"></line>
+                    <line x1="15" y1="7" x2="15" y2="17"></line>
+                  </svg>
+                </button>
 
                 <button
                   type="submit"

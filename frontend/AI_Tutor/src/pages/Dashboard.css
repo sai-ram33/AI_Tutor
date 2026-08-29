@@ -970,6 +970,41 @@
   box-shadow: none;
 }
 
+/* Voice Buttons */
+.voice-btn, .advanced-voice-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.voice-btn {
+  background: var(--color-bg-surface-elevated);
+  color: var(--color-text-muted);
+}
+
+.voice-btn:hover {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.advanced-voice-btn {
+  background: var(--color-text-primary);
+  color: var(--color-bg-main);
+}
+
+.advanced-voice-btn:hover {
+  transform: scale(1.06);
+  box-shadow: var(--shadow-md);
+}
+
 .workspace-disclaimer {
   text-align: center;
   font-size: 0.6875rem;

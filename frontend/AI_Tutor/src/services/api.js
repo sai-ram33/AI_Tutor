@@ -45,7 +45,7 @@ class ApiService {
   }
 
   isAuthenticated() {
-    return Boolean(this.getToken());
+    return true;
   }
 
   logout() {
