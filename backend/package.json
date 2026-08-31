@@ -10,7 +10,8 @@
     "start:qwen": "py services/ai/qwen/qwen_service.py",
     "test:db": "node test_db.js",
     "test:ai": "node test_mistral.js",
-    "test:vision": "node test_vision.js"
+    "test:vision": "node test_vision.js",
+    "test:tts": "node test_tts.js"
   },
   "dependencies": {
     "@mistralai/mistralai": "^2.6.4",

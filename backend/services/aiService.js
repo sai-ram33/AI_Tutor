@@ -1,8 +1,27 @@
 import { config } from '../config/env.js';
 import { mistralService } from './ai/mistral/mistralService.js';
 import { qwenClient } from './ai/qwen/qwenClient.js';
+import { groqTtsService } from './ai/groq/groqTtsService.js';
 
 export const aiService = {
+  /**
+   * Generates speech/audio from text using Groq TTS service
+   * @param {Object} params
+   * @param {string} params.text - The text to synthesize
+   * @param {string} [params.voice] - The voice persona ('autumn', 'diana', 'hannah', etc.)
+   * @param {string} [params.model] - The TTS model
+   * @returns {Promise<{audioBuffer: Buffer, mimeType: string, format: string, byteLength: number}>}
+   */
+  async textToAudio({ text, voice, model }) {
+    return await groqTtsService.generateSpeech({ text, voice, model });
+  },
+
+  /**
+   * Returns list of supported TTS voice personas
+   */
+  getTtsVoices() {
+    return groqTtsService.getAvailableVoices();
+  },
   /**
    * Generates a pedagogical AI response adapted for mode, level, and action using Mistral AI.
    * @param {Object} params
