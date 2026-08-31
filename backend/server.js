@@ -7,6 +7,7 @@ import userRoutes from './routes/userRoutes.js';
 import conversationRoutes from './routes/conversationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import visionRoutes from './routes/visionRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/vision', visionRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Centralized Error Handling Middleware
 app.use(errorHandler);
