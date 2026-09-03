@@ -15,4 +15,8 @@ export const config = {
   groqApiKey: process.env.GROQ_API_KEY || '',
   groqTtsModel: process.env.GROQ_TTS_MODEL || 'canopylabs/orpheus-v1-english',
   groqTtsVoice: process.env.GROQ_TTS_VOICE || 'autumn',
+  lfmAudioModel: process.env.LFM_AUDIO_MODEL || 'LiquidAI/LFM2.5-Audio-1.5B',
+  lfmAudioServiceUrl: process.env.LFM_AUDIO_SERVICE_URL || 'http://127.0.0.1:8001',
+  lfmAudioPort: parseInt(process.env.LFM_AUDIO_PORT || '8001', 10),
+  hfToken: process.env.HF_TOKEN || '',
 };

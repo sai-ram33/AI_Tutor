@@ -8,10 +8,12 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "start:qwen": "py services/ai/qwen/qwen_service.py",
+    "start:audio": "py services/ai/audio/lfm_audio_service.py",
     "test:db": "node test_db.js",
     "test:ai": "node test_mistral.js",
     "test:vision": "node test_vision.js",
-    "test:tts": "node test_tts.js"
+    "test:tts": "node test_tts.js",
+    "test:audio": "py services/ai/audio/test_lfm_audio.py"
   },
   "dependencies": {
     "@mistralai/mistralai": "^2.6.4",
