@@ -9,6 +9,7 @@ export const visionController = {
    * Accepts multipart/form-data with 'image' file and 'message' text.
    */
   async processVisionChat(req, res, next) {
+    console.log('[Vision Controller] processVisionChat called', { body: req.body, hasFile: !!req.file });
     try {
       const { conversationId, message, mode = 'explain' } = req.body;
       const file = req.file;
@@ -38,46 +39,56 @@ export const visionController = {
         });
       }
 
-      let convId = conversationId;
+      let convId = conversationId || Date.now();
+      let history = [];
+      let userLevel = 'beginner';
+      let userMessage;
 
-      // 4. Verify or create conversation in PostgreSQL
-      if (convId) {
-        const existingConv = await ConversationModel.findById(convId);
-        if (!existingConv) {
-          return res.status(404).json({
-            success: false,
-            error: 'Conversation not found.',
+      try {
+        // 4. Verify or create conversation in PostgreSQL
+        if (conversationId) {
+          const existingConv = await ConversationModel.findById(conversationId);
+          if (existingConv) {
+            if (existingConv.user_id !== req.user?.userId) {
+              return res.status(403).json({
+                success: false,
+                error: 'You do not have permission to access this conversation.',
+              });
+            }
+          }
+        } else {
+          const title = `[Image] ${message.trim().slice(0, 30)}`;
+          const newConv = await ConversationModel.create({
+            userId: req.user?.userId || 1,
+            title,
           });
+          convId = newConv.id;
         }
-        if (existingConv.user_id !== req.user.userId) {
-          return res.status(403).json({
-            success: false,
-            error: 'You do not have permission to access this conversation.',
-          });
-        }
-      } else {
-        const title = `[Image] ${message.trim().slice(0, 30)}`;
-        const newConv = await ConversationModel.create({
-          userId: req.user.userId,
-          title,
+
+        // 5. Fetch prior conversation history
+        history = await MessageModel.getRecentHistory(convId, 10);
+
+        // 6. Save user message to database
+        userMessage = await MessageModel.create({
+          conversationId: convId,
+          role: 'user',
+          content: `[Uploaded Image: ${file.originalname}] ${message.trim()}`,
+          mode,
         });
-        convId = newConv.id;
+
+        // 7. Fetch user learning level
+        if (req.user?.userId) {
+          const user = await UserModel.findById(req.user.userId);
+          if (user) userLevel = user.level || 'beginner';
+        }
+      } catch (dbErr) {
+        console.warn('Database unavailable, skipping DB reads/writes for vision message:', dbErr.message);
+        userMessage = {
+          role: 'user',
+          content: `[Uploaded Image: ${file.originalname}] ${message.trim()}`,
+          mode
+        };
       }
-
-      // 5. Fetch prior conversation history
-      const history = await MessageModel.getRecentHistory(convId, 10);
-
-      // 6. Save user message to database
-      const userMessage = await MessageModel.create({
-        conversationId: convId,
-        role: 'user',
-        content: `[Uploaded Image: ${file.originalname}] ${message.trim()}`,
-        mode,
-      });
-
-      // 7. Fetch user learning level
-      const user = await UserModel.findById(req.user.userId);
-      const userLevel = user?.level || 'beginner';
 
       // 8. Invoke Qwen Vision Model
       const qwenResult = await aiService.explainImage({
@@ -91,12 +102,22 @@ export const visionController = {
       });
 
       // 9. Save AI response to database
-      const aiMessage = await MessageModel.create({
-        conversationId: convId,
+      let aiMessage = {
         role: 'ai',
         content: qwenResult.response,
         mode,
-      });
+      };
+      
+      try {
+        aiMessage = await MessageModel.create({
+          conversationId: convId,
+          role: 'ai',
+          content: qwenResult.response,
+          mode,
+        });
+      } catch (dbErr) {
+        console.warn('Database unavailable, skipping DB write for vision AI message:', dbErr.message);
+      }
 
       res.status(200).json({
         success: true,

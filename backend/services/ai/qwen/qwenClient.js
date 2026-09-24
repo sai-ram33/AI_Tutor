@@ -106,6 +106,11 @@ class QwenClient {
       }
 
       if (err.cause?.code === 'ECONNREFUSED' || err.message.includes('fetch failed')) {
+        if (config.mistralApiKey) {
+          console.log('[Qwen Vision] Local service offline, falling back to Mistral Pixtral API');
+          return await this.fallbackToMistral({ imageBuffer, imageMimetype, message, history, mode, userLevel });
+        }
+
         const connErr = new Error(
           'Qwen Vision service is currently offline. Please ensure the Python Qwen service is started.'
         );
@@ -114,6 +119,57 @@ class QwenClient {
       }
 
       throw err;
+    }
+  }
+
+  /**
+   * Fallback to Mistral Vision API (pixtral-12b-2409) if local python server is off
+   */
+  async fallbackToMistral({ imageBuffer, imageMimetype, message, history, mode, userLevel }) {
+    try {
+      const base64Image = imageBuffer.toString('base64');
+      const dataUrl = `data:${imageMimetype};base64,${base64Image}`;
+      
+      const systemPrompt = `You are an AI Teacher with image understanding capability. A student with a '${userLevel}' learning level is asking for help.\n\nThe user can provide an image and a question. Analyze the complete visual content of the image.\n\nUse simple English, explain step-by-step, and never fabricate information from the image.`;
+
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.mistralApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'pixtral-12b-2409',
+          temperature: mode === 'explain' ? 0.4 : 0.6,
+          max_tokens: 1024,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { 
+              role: 'user', 
+              content: [
+                { type: 'text', text: message },
+                { type: 'image_url', image_url: { url: dataUrl } }
+              ] 
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Mistral API Error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        model: 'Mistral/pixtral-12b-2409',
+        response: data.choices[0].message.content,
+        device: 'cloud'
+      };
+    } catch (err) {
+      console.error('[Mistral Fallback] Failed:', err.message);
+      throw new Error('Both Local Vision and Cloud Vision (Mistral) are currently unavailable.');
     }
   }
 }

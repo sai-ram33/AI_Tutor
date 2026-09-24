@@ -146,6 +146,31 @@ export function Dashboard() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [feedbackState, setFeedbackState] = useState({}); // { [msgId]: 'like' | 'dislike' }
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [attachedFileUrl, setAttachedFileUrl] = useState(null);
+  const audioRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setAttachedFile(file);
+      if (file.type.startsWith('image/')) {
+        setAttachedFileUrl(URL.createObjectURL(file));
+      } else {
+        setAttachedFileUrl(null);
+      }
+    }
+  };
+
+  const removeAttachedFile = () => {
+    setAttachedFile(null);
+    if (attachedFileUrl) {
+      URL.revokeObjectURL(attachedFileUrl);
+      setAttachedFileUrl(null);
+    }
+  };
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -348,6 +373,46 @@ export function Dashboard() {
     }));
   };
 
+  const handlePlayAudio = async (msgId, content) => {
+    try {
+      if (playingAudioId === msgId && audioRef.current) {
+        // Stop playing
+        audioRef.current.pause();
+        audioRef.current = null;
+        setPlayingAudioId(null);
+        return;
+      }
+      
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      setPlayingAudioId(msgId);
+      
+      // Strip html tags
+      const tempEl = document.createElement('div');
+      tempEl.innerHTML = content;
+      const cleanText = tempEl.textContent || tempEl.innerText || '';
+      
+      const audioUrl = await api.generateAudio(cleanText);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setPlayingAudioId(null);
+        audioRef.current = null;
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.error('Audio playback failed', err);
+      setPlayingAudioId(null);
+      audioRef.current = null;
+      alert('Failed to play audio: ' + err.message);
+    }
+  };
+
   const handleStarterCardClick = (card) => {
     setResponseMode(card.mode);
     setInputValue(card.prompt);
@@ -405,11 +470,21 @@ result = square(4) # 16</code></pre>`;
     };
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if ((inputValue.trim() || attachedFile) && !isLoading) {
+        handleSendMessage();
+      }
+    }
+  };
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
+    console.log('[Dashboard] handleSendMessage called', { inputValue, attachedFile });
+    if ((!inputValue.trim() && !attachedFile) || isLoading) return;
 
-    const userText = inputValue.trim();
+    const userText = inputValue.trim() || 'Explain this image.';
     setInputValue('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -438,6 +513,7 @@ result = square(4) # 16</code></pre>`;
       role: 'user',
       content: userText,
       timestamp: new Date().toISOString(),
+      ...(attachedFileUrl ? { imageUrl: attachedFileUrl } : {})
     };
 
     setConversations((prev) =>
@@ -456,11 +532,27 @@ result = square(4) # 16</code></pre>`;
     try {
       if (api.isAuthenticated()) {
         const isNumericId = !isNaN(Number(targetConvId)) && Number(targetConvId) > 0;
-        const result = await api.sendMessage({
-          conversationId: isNumericId ? Number(targetConvId) : undefined,
-          message: userText,
-          mode: responseMode,
-        });
+        let result;
+
+        if (attachedFile) {
+          console.log('[Dashboard] Calling sendVisionMessage with file:', attachedFile.name);
+          result = await api.sendVisionMessage({
+            conversationId: isNumericId ? Number(targetConvId) : undefined,
+            message: userText,
+            imageFile: attachedFile,
+            mode: responseMode,
+          });
+          console.log('[Dashboard] sendVisionMessage result:', result);
+          removeAttachedFile(); // Clear the attachment
+        } else {
+          console.log('[Dashboard] Calling sendMessage');
+          result = await api.sendMessage({
+            conversationId: isNumericId ? Number(targetConvId) : undefined,
+            message: userText,
+            mode: responseMode,
+          });
+          console.log('[Dashboard] sendMessage result:', result);
+        }
 
         if (result && result.aiMessage) {
           const realConvId = String(result.conversationId || targetConvId);
@@ -495,7 +587,7 @@ result = square(4) # 16</code></pre>`;
         }
       }
     } catch (err) {
-      console.warn('Backend chat API note (using built-in generator):', err.message);
+      console.error('[Dashboard] Backend chat API error:', err);
     }
 
     // Resilient fallback generator
@@ -643,12 +735,6 @@ result = square(4) # 16</code></pre>`;
     setIsLoading(false);
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
 
   return (
     <div className={`claude-dashboard ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -907,6 +993,15 @@ result = square(4) # 16</code></pre>`;
                         </div>
 
                         <div className="message-prose-body">
+                          {message.imageUrl && (
+                            <div className="message-image-container" style={{ marginBottom: '12px' }}>
+                              <img 
+                                src={message.imageUrl} 
+                                alt="User attachment" 
+                                style={{ maxWidth: '300px', borderRadius: '12px', border: '1px solid var(--border-color)', objectFit: 'contain' }}
+                              />
+                            </div>
+                          )}
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
@@ -937,6 +1032,15 @@ result = square(4) # 16</code></pre>`;
                         {/* Claude-Style Action Toolbar on Assistant Messages */}
                         {isAssistant && (
                           <div className="message-action-toolbar">
+                            <button
+                              type="button"
+                              className="action-btn"
+                              onClick={() => handlePlayAudio(message.id, message.content)}
+                              title={playingAudioId === message.id ? "Stop audio" : "Listen to explanation"}
+                            >
+                              {playingAudioId === message.id ? '🔊 Stop' : '🔈 Listen'}
+                            </button>
+
                             <button
                               type="button"
                               className={`action-btn ${isCopied ? 'copied' : ''}`}
@@ -1052,6 +1156,26 @@ result = square(4) # 16</code></pre>`;
         {/* Claude-Style Floating Input Bar */}
         <div className="workspace-footer">
           <form className="claude-input-card" onSubmit={handleSendMessage}>
+            {/* Display attached file name or image preview if exists */}
+            {attachedFile && (
+              <div className="attached-file-preview-container">
+                <div className="attached-file-thumbnail">
+                  {attachedFileUrl ? (
+                    <img src={attachedFileUrl} alt="Attachment preview" className="preview-image" />
+                  ) : (
+                    <div className="preview-file-icon">📄</div>
+                  )}
+                  <button type="button" className="preview-remove-btn" onClick={removeAttachedFile} title="Remove attachment">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                {!attachedFileUrl && <span className="preview-filename">{attachedFile.name}</span>}
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1066,6 +1190,21 @@ result = square(4) # 16</code></pre>`;
 
             <div className="input-card-controls">
               <div className="controls-left">
+                {/* File Attachment Button */}
+                <div className="attachment-wrapper">
+                  <input
+                    type="file"
+                    id="file-upload"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    accept="image/*,.pdf"
+                    onChange={handleFileChange}
+                  />
+                  <label htmlFor="file-upload" className="mode-picker-btn attachment-btn" title="Add image or PDF">
+                    <span className="picker-icon">➕</span>
+                  </label>
+                </div>
+
                 {/* Mode Selector Dropdown */}
                 <div className="mode-picker-wrapper" ref={modeDropdownRef}>
                   <button
@@ -1140,7 +1279,7 @@ result = square(4) # 16</code></pre>`;
                 <button
                   type="submit"
                   className="send-arrow-btn"
-                  disabled={!inputValue.trim() || isLoading}
+                  disabled={(!inputValue.trim() && !attachedFile) || isLoading}
                   aria-label="Send message"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

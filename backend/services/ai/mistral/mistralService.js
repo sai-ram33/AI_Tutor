@@ -65,6 +65,7 @@ Pedagogical Guidelines:
 5. Remember the context of the ongoing conversation. Never fabricate previous details or claim to remember things not present in the conversation history.
 6. If the student is confused, re-explain using a different perspective or analogy.
 7. If the student asks for a step-by-step explanation or practice, adapt accordingly.
+8. CONVERSATIONAL INPUTS: If the student simply says hello, greets you, or makes casual conversation (e.g., "hi", "how are you"), reply naturally and warmly in 1-2 sentences without forcing an analogy, deep explanation, or rigid structure.
 ${modeInstruction}
 ${actionInstruction}
 

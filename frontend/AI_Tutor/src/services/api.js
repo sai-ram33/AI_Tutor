@@ -185,6 +185,68 @@ class ApiService {
       body: JSON.stringify({ conversationId, message, mode, action }),
     });
   }
+
+  // --- Vision Endpoint ---
+  async sendVisionMessage({ conversationId, message, imageFile, mode = 'explain', action = null }) {
+    const url = `${API_BASE_URL}/vision/chat`;
+    const token = this.getToken();
+    
+    const formData = new FormData();
+    if (conversationId) formData.append('conversationId', conversationId);
+    if (message) formData.append('message', message);
+    if (mode) formData.append('mode', mode);
+    if (action) formData.append('action', action);
+    if (imageFile) formData.append('image', imageFile);
+
+    const headers = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // fetch sets Content-Type automatically for FormData
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (response.status === 401 && token) {
+          this.setToken(null);
+        }
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
+
+      return data;
+    } catch (err) {
+      console.warn(`[API Request Error] /vision/chat:`, err.message);
+      throw err;
+    }
+  }
+
+  // --- AI / TTS Endpoints ---
+  async generateAudio(text, voice) {
+    const url = `${API_BASE_URL}/ai/text-to-audio`;
+    const token = this.getToken();
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ text, voice }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`TTS failed: ${response.status} ${errText}`);
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
 }
 
 export const api = new ApiService();
