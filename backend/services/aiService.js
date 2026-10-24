@@ -22,6 +22,14 @@ export const aiService = {
   getTtsVoices() {
     return groqTtsService.getAvailableVoices();
   },
+
+  /**
+   * Explains an uploaded image and text prompt using Qwen Vision (or Mistral Pixtral fallback)
+   */
+  async explainImage(params) {
+    return await qwenClient.generate(params);
+  },
+
   /**
    * Generates a pedagogical AI response adapted for mode, level, and action using Mistral AI.
    * @param {Object} params

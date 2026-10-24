@@ -406,10 +406,29 @@ export function Dashboard() {
       
       await audio.play();
     } catch (err) {
-      console.error('Audio playback failed', err);
+      console.warn('Backend TTS failed, using browser SpeechSynthesis fallback:', err.message);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.onend = () => {
+          setPlayingAudioId(null);
+          audioRef.current = null;
+        };
+        utterance.onerror = () => {
+          setPlayingAudioId(null);
+          audioRef.current = null;
+        };
+        audioRef.current = {
+          pause: () => window.speechSynthesis.cancel(),
+        };
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
       setPlayingAudioId(null);
       audioRef.current = null;
-      alert('Failed to play audio: ' + err.message);
+      alert('Audio playback error: ' + err.message);
     }
   };
 

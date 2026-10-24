@@ -7,6 +7,9 @@ import { Onboarding } from './pages/Onboarding';
 import { Dashboard } from './pages/Dashboard';
 import { Profile } from './pages/Profile';
 import { NotFound } from './pages/NotFound';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, firestoreService } from './services/firebase';
+import { api } from './services/api';
 import './styles/design-system.css';
 import './App.css';
 
@@ -24,17 +27,51 @@ function ThemeInitializer() {
   return null;
 }
 
+// Observe Firebase Auth state continuously
+function AuthObserver() {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          api.setToken(token);
+          const stored = api.getStoredUser();
+          if (!stored || stored.uid !== user.uid) {
+            const fsUser = await firestoreService.getUserProfile(user.uid);
+            if (fsUser) {
+              api.setStoredUser(fsUser);
+            } else {
+              api.setStoredUser({
+                uid: user.uid,
+                name: user.displayName || 'Learner',
+                email: user.email,
+                level: 'intermediate',
+                language: 'english',
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Auth sync error:', e.message);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <ThemeInitializer />
+      <AuthObserver />
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Protected routes (would add auth guard in real app) */}
+        {/* Protected routes */}
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />

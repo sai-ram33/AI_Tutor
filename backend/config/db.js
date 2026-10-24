@@ -3,12 +3,18 @@ import { config } from './env.js';
 
 const { Pool } = pg;
 
+export let isPostgresAvailable = false;
+
 export const pool = new Pool({
   connectionString: config.databaseUrl,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 3000,
 });
 
 export const query = async (text, params) => {
+  if (!isPostgresAvailable) {
+    throw new Error('PostgreSQL database is currently disconnected.');
+  }
   const start = Date.now();
   const res = await pool.query(text, params);
   const duration = Date.now() - start;
@@ -21,7 +27,8 @@ export const query = async (text, params) => {
 export const initDb = async () => {
   try {
     const client = await pool.connect();
-    console.log('Connected to PostgreSQL successfully.');
+    isPostgresAvailable = true;
+    console.log('✅ Connected to PostgreSQL successfully.');
 
     // Create tables
     await client.query(`
@@ -59,7 +66,8 @@ export const initDb = async () => {
     console.log('Database tables verified and initialized.');
     client.release();
   } catch (err) {
-    console.error('PostgreSQL connection warning:', err.message);
-    console.log('Ensure PostgreSQL is running and DATABASE_URL in backend/.env is valid.');
+    isPostgresAvailable = false;
+    console.warn('⚠️  PostgreSQL connection unavailable (' + err.message + ').');
+    console.warn('    Ai Tutor is running in resilient mode (Firebase will handle data persistence).');
   }
 };
