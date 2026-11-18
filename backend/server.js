@@ -23,9 +23,12 @@ app.use(cors({
 
 app.use(express.json({ limit: '5mb' }));
 
-// Healthcheck (supports /, /health, and /api/health for cron jobs & uptime monitoring)
+// Healthcheck & Keep-alive for cron jobs and uptime monitoring
 app.use('/api/health', healthRoutes);
 app.use('/health', healthRoutes);
+app.use('/ping', healthRoutes);
+app.use('/api/cron/health', healthRoutes);
+app.use('/api/cron/keepalive', healthRoutes);
 app.get('/', healthController.checkHealth);
 app.head('/', healthController.checkHealth);
 

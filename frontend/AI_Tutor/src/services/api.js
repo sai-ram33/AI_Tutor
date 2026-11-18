@@ -384,26 +384,26 @@ class ApiService {
       body: JSON.stringify({ conversationId, message, mode, action }),
     });
 
-    // Mirror to Firestore so data is never lost
+    // Mirror to Firestore in background without blocking the UI response
     try {
       const convId = result.conversationId || conversationId || String(Date.now());
       if (result.userMessage) {
-        await firestoreService.saveMessage(uid, convId, {
+        firestoreService.saveMessage(uid, convId, {
           id: result.userMessage.id || String(Date.now()),
           role: 'user',
           content: message,
           mode,
           timestamp: result.userMessage.created_at || new Date().toISOString(),
-        });
+        }).catch((fsErr) => console.warn('Firestore user message mirror note:', fsErr?.message));
       }
       if (result.aiMessage) {
-        await firestoreService.saveMessage(uid, convId, {
+        firestoreService.saveMessage(uid, convId, {
           id: result.aiMessage.id || String(Date.now() + 1),
           role: 'assistant',
           content: result.aiMessage.content,
           mode: result.aiMessage.mode || mode,
           timestamp: result.aiMessage.created_at || new Date().toISOString(),
-        });
+        }).catch((fsErr) => console.warn('Firestore AI message mirror note:', fsErr?.message));
       }
     } catch (fsErr) {
       console.warn('Firestore message mirror note:', fsErr.message);
@@ -445,26 +445,26 @@ class ApiService {
       throw new Error(data.error || `HTTP error ${response.status}`);
     }
 
-    // Mirror to Firestore
+    // Mirror to Firestore in background without blocking UI
     try {
       const convId = data.conversationId || conversationId || String(Date.now());
       if (data.userMessage) {
-        await firestoreService.saveMessage(uid, convId, {
+        firestoreService.saveMessage(uid, convId, {
           id: data.userMessage.id || String(Date.now()),
           role: 'user',
           content: message,
           mode,
           timestamp: new Date().toISOString(),
-        });
+        }).catch((fsErr) => console.warn('Firestore vision user message mirror note:', fsErr?.message));
       }
       if (data.aiMessage) {
-        await firestoreService.saveMessage(uid, convId, {
+        firestoreService.saveMessage(uid, convId, {
           id: data.aiMessage.id || String(Date.now() + 1),
           role: 'assistant',
           content: data.aiMessage.content,
           mode,
           timestamp: new Date().toISOString(),
-        });
+        }).catch((fsErr) => console.warn('Firestore vision AI message mirror note:', fsErr?.message));
       }
     } catch (fsErr) {
       console.warn('Firestore vision mirror note:', fsErr.message);

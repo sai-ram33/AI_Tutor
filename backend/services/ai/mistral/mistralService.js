@@ -225,8 +225,8 @@ CRITICAL: At the very end of your response, on a new line, provide a single rele
     const promptRegex = /<<<NEXT_PROMPT:\s*([\s\S]*?)(?:>>>|>>|>|$)/i;
     const match = content.match(promptRegex);
 
-    if (match) {
-      suggestedNextPrompt = match[1].trim();
+    if (match && match[1]?.trim()) {
+      suggestedNextPrompt = match[1].replace(/>+$/, '').trim();
       content = content.replace(promptRegex, '').trim();
     } else {
       const paragraphs = content.split('\n\n').map(p => p.trim()).filter(Boolean);
