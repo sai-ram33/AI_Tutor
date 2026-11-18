@@ -2,6 +2,7 @@ import { ConversationModel } from '../models/conversationModel.js';
 import { MessageModel } from '../models/messageModel.js';
 import { UserModel } from '../models/userModel.js';
 import { aiService } from '../services/aiService.js';
+import { isPostgresAvailable } from '../config/db.js';
 
 export const chatController = {
   /**
@@ -16,22 +17,32 @@ export const chatController = {
         return res.status(400).json({ error: 'Message content is required.' });
       }
 
-      let convId = 1;
+      let convId = conversationId || Date.now();
       let history = [];
       let userMessage = { id: Date.now(), role: 'user', content: message.trim(), mode };
       let userLevel = 'beginner';
 
-      try {
-        // 1. Verify or create conversation in PostgreSQL
-        const isNumericId = conversationId && !isNaN(Number(conversationId)) && Number(conversationId) > 0 && Number(conversationId) < 2147483647;
-        if (isNumericId) {
-          const existingConv = await ConversationModel.findById(Number(conversationId));
-          if (existingConv && existingConv.user_id !== req.user?.userId) {
-            return res.status(403).json({ error: 'You do not have permission to access this conversation.' });
-          }
-          if (existingConv) {
-            convId = existingConv.id;
+      if (isPostgresAvailable) {
+        try {
+          // 1. Verify or create conversation in PostgreSQL
+          const isNumericId = conversationId && !isNaN(Number(conversationId)) && Number(conversationId) > 0 && Number(conversationId) < 2147483647;
+          if (isNumericId) {
+            const existingConv = await ConversationModel.findById(Number(conversationId));
+            if (existingConv && existingConv.user_id !== req.user?.userId) {
+              return res.status(403).json({ error: 'You do not have permission to access this conversation.' });
+            }
+            if (existingConv) {
+              convId = existingConv.id;
+            } else {
+              const title = message.trim().slice(0, 40);
+              const newConv = await ConversationModel.create({
+                userId: req.user?.userId || 1,
+                title,
+              });
+              convId = newConv.id;
+            }
           } else {
+            // Auto-create new conversation with integer ID
             const title = message.trim().slice(0, 40);
             const newConv = await ConversationModel.create({
               userId: req.user?.userId || 1,
@@ -39,34 +50,26 @@ export const chatController = {
             });
             convId = newConv.id;
           }
-        } else {
-          // Auto-create new conversation with integer ID
-          const title = message.trim().slice(0, 40);
-          const newConv = await ConversationModel.create({
-            userId: req.user?.userId || 1,
-            title,
+
+          // 2. Fetch context history BEFORE saving the new message
+          history = await MessageModel.getRecentHistory(convId, 15);
+
+          // 3. Save user message to database
+          userMessage = await MessageModel.create({
+            conversationId: convId,
+            role: 'user',
+            content: message.trim(),
+            mode,
           });
-          convId = newConv.id;
+
+          // 4. Fetch user learning level
+          if (req.user?.userId) {
+            const user = await UserModel.findById(req.user.userId);
+            if (user) userLevel = user.level || 'beginner';
+          }
+        } catch (dbErr) {
+          console.warn('Database note, continuing pedagogical flow:', dbErr.message);
         }
-
-        // 2. Fetch context history BEFORE saving the new message
-        history = await MessageModel.getRecentHistory(convId, 15);
-
-        // 3. Save user message to database
-        userMessage = await MessageModel.create({
-          conversationId: convId,
-          role: 'user',
-          content: message.trim(),
-          mode,
-        });
-
-        // 4. Fetch user learning level
-        if (req.user?.userId) {
-          const user = await UserModel.findById(req.user.userId);
-          if (user) userLevel = user.level || 'beginner';
-        }
-      } catch (dbErr) {
-        console.warn('Database note, continuing pedagogical flow:', dbErr.message);
       }
 
       // 5. Generate AI pedagogical response via Mistral
@@ -83,16 +86,18 @@ export const chatController = {
 
       // 6. Save AI message to database
       let aiMessage = { id: Date.now() + 1, role: 'ai', content: responseContent, mode };
-      try {
-        const savedAiMessage = await MessageModel.create({
-          conversationId: convId,
-          role: 'ai',
-          content: responseContent,
-          mode,
-        });
-        if (savedAiMessage) aiMessage = savedAiMessage;
-      } catch (dbErr) {
-        console.warn('Database note, saving in-memory AI message:', dbErr.message);
+      if (isPostgresAvailable && Number(convId) > 0 && Number(convId) < 2147483647) {
+        try {
+          const savedAiMessage = await MessageModel.create({
+            conversationId: Number(convId),
+            role: 'ai',
+            content: responseContent,
+            mode,
+          });
+          if (savedAiMessage) aiMessage = savedAiMessage;
+        } catch (dbErr) {
+          console.warn('Database note, saving in-memory AI message:', dbErr.message);
+        }
       }
 
       res.status(201).json({

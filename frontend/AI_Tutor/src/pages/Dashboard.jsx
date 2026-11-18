@@ -584,21 +584,25 @@ result = square(4) # 16</code></pre>`;
             metadata: { originalQuestion: userText },
           };
 
-          setConversations((prev) =>
-            prev.map((c) =>
+          let resolvedId = realConvId;
+          setConversations((prev) => {
+            const hasDuplicate =
+              realConvId !== targetConvId && prev.some((c) => c.id === realConvId);
+            resolvedId = hasDuplicate ? targetConvId : realConvId;
+            return prev.map((c) =>
               c.id === targetConvId
                 ? {
                     ...c,
-                    id: realConvId,
+                    id: resolvedId,
                     updatedAt: new Date().toISOString(),
                     messages: [...c.messages, aiMsg],
                   }
                 : c
-            )
-          );
+            );
+          });
 
-          if (realConvId !== targetConvId) {
-            setActiveConversationId(realConvId);
+          if (resolvedId !== targetConvId) {
+            setActiveConversationId(resolvedId);
           }
 
           setIsLoading(false);
