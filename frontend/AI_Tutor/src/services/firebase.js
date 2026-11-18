@@ -72,6 +72,34 @@ export const getFirebaseErrorMessage = (error) => {
 };
 
 // ==========================================
+// Safe Timeout & Offline LocalStorage Fallbacks
+// ==========================================
+const LOCAL_STORAGE_PREFIX = 'ai_tutor_offline_';
+
+const getLocalData = (key, fallback = null) => {
+  try {
+    const val = localStorage.getItem(LOCAL_STORAGE_PREFIX + key);
+    return val ? JSON.parse(val) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const setLocalData = (key, val) => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(val));
+  } catch {}
+};
+
+export const withTimeout = (promise, ms = 1500) => {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Firestore operation timed out')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
+
+// ==========================================
 // Authentication Functions
 // ==========================================
 
@@ -98,12 +126,13 @@ export const firebaseSignUp = async ({ name, email, password, level = 'beginner'
     createdAt: new Date().toISOString(),
   };
 
-  // Store user document in Firestore
-  try {
-    await setDoc(doc(db, 'users', user.uid), userProfile, { merge: true });
-  } catch (fsErr) {
+  // Cache user profile locally
+  setLocalData('user_' + user.uid, userProfile);
+
+  // Store user document in Firestore without blocking signup
+  withTimeout(setDoc(doc(db, 'users', user.uid), userProfile, { merge: true }), 1500).catch((fsErr) => {
     console.warn('[Firestore] Error saving initial user profile:', fsErr.message);
-  }
+  });
 
   return { user: userProfile, token, firebaseUser: user };
 };
@@ -116,22 +145,24 @@ export const firebaseLogin = async ({ email, password }) => {
   const user = userCredential.user;
   const token = await user.getIdToken();
 
-  // Try to load user profile from Firestore
+  const cachedUser = getLocalData('user_' + user.uid);
+
   let userProfile = {
     uid: user.uid,
-    name: user.displayName || 'Learner',
+    name: user.displayName || (cachedUser && cachedUser.name) || 'Learner',
     email: user.email,
-    level: 'intermediate',
-    language: 'english',
+    level: (cachedUser && cachedUser.level) || 'intermediate',
+    language: (cachedUser && cachedUser.language) || 'english',
+    ...(cachedUser || {}),
   };
 
   try {
-    const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-    if (userDocSnap.exists()) {
+    const userDocSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 1500);
+    if (userDocSnap && userDocSnap.exists()) {
       userProfile = { ...userProfile, ...userDocSnap.data() };
+      setLocalData('user_' + user.uid, userProfile);
     } else {
-      // First time doc creation
-      await setDoc(doc(db, 'users', user.uid), userProfile, { merge: true });
+      withTimeout(setDoc(doc(db, 'users', user.uid), userProfile, { merge: true }), 1500).catch(() => {});
     }
   } catch (fsErr) {
     console.warn('[Firestore] Error fetching user profile on login:', fsErr.message);
@@ -148,24 +179,29 @@ export const firebaseGoogleLogin = async () => {
   const user = result.user;
   const token = await user.getIdToken();
 
+  const cachedUser = getLocalData('user_' + user.uid);
+
   let userProfile = {
     uid: user.uid,
-    name: user.displayName || 'Learner',
+    name: user.displayName || (cachedUser && cachedUser.name) || 'Learner',
     email: user.email,
-    level: 'intermediate',
-    language: 'english',
+    level: (cachedUser && cachedUser.level) || 'intermediate',
+    language: (cachedUser && cachedUser.language) || 'english',
     photoURL: user.photoURL || null,
+    ...(cachedUser || {}),
   };
 
   try {
-    const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-    if (userDocSnap.exists()) {
+    const userDocSnap = await withTimeout(getDoc(doc(db, 'users', user.uid)), 1500);
+    if (userDocSnap && userDocSnap.exists()) {
       userProfile = { ...userProfile, ...userDocSnap.data() };
+      setLocalData('user_' + user.uid, userProfile);
     } else {
-      await setDoc(doc(db, 'users', user.uid), {
+      setLocalData('user_' + user.uid, userProfile);
+      withTimeout(setDoc(doc(db, 'users', user.uid), {
         ...userProfile,
         createdAt: new Date().toISOString(),
-      }, { merge: true });
+      }, { merge: true }), 1500).catch(() => {});
     }
   } catch (fsErr) {
     console.warn('[Firestore] Error fetching/saving Google user profile:', fsErr.message);
@@ -195,56 +231,73 @@ export const firebaseResetPassword = async (email) => {
 
 export const firestoreService = {
   async saveUserProfile(uid, data) {
+    setLocalData('user_' + uid, data);
     try {
-      await setDoc(doc(db, 'users', uid), data, { merge: true });
+      await withTimeout(setDoc(doc(db, 'users', uid), data, { merge: true }), 1500);
       return true;
     } catch (e) {
-      console.warn('[Firestore] saveUserProfile error:', e.message);
+      console.warn('[Firestore] saveUserProfile note:', e.message);
       return false;
     }
   },
 
   async getUserProfile(uid) {
     try {
-      const snap = await getDoc(doc(db, 'users', uid));
-      return snap.exists() ? snap.data() : null;
+      const snap = await withTimeout(getDoc(doc(db, 'users', uid)), 1500);
+      if (snap && snap.exists()) {
+        const data = snap.data();
+        setLocalData('user_' + uid, data);
+        return data;
+      }
     } catch (e) {
-      console.warn('[Firestore] getUserProfile error:', e.message);
-      return null;
+      console.warn('[Firestore] getUserProfile note:', e.message);
     }
+    return getLocalData('user_' + uid, null);
   },
 
   async getConversations(userId) {
     try {
       const convsCol = collection(db, 'users', userId, 'conversations');
       const q = query(convsCol, orderBy('updatedAt', 'desc'));
-      const snap = await getDocs(q);
+      const snap = await withTimeout(getDocs(q), 1500);
       const convs = [];
       snap.forEach((d) => {
         convs.push({ id: d.id, ...d.data() });
       });
+      if (convs.length > 0) {
+        setLocalData('convs_' + userId, convs);
+      }
       return convs;
     } catch (e) {
-      console.warn('[Firestore] getConversations error:', e.message);
-      return [];
+      console.warn('[Firestore] getConversations note:', e.message);
+      return getLocalData('convs_' + userId, []);
     }
   },
 
   async saveConversation(userId, conv) {
     try {
+      const currentConvs = getLocalData('convs_' + userId, []);
+      const existingIdx = currentConvs.findIndex((c) => String(c.id) === String(conv.id));
+      if (existingIdx >= 0) {
+        currentConvs[existingIdx] = { ...currentConvs[existingIdx], ...conv };
+      } else {
+        currentConvs.unshift(conv);
+      }
+      setLocalData('convs_' + userId, currentConvs);
+
       const convRef = doc(db, 'users', userId, 'conversations', String(conv.id));
-      await setDoc(convRef, {
+      withTimeout(setDoc(convRef, {
         id: String(conv.id),
         title: conv.title || 'New Chat',
         pinned: !!conv.pinned,
         updatedAt: conv.updatedAt || new Date().toISOString(),
-      }, { merge: true });
+      }, { merge: true }), 1500).catch(() => {});
 
-      // Save messages in subcollection if present
       if (conv.messages && Array.isArray(conv.messages)) {
+        setLocalData('msgs_' + userId + '_' + conv.id, conv.messages);
         for (const msg of conv.messages) {
           const msgRef = doc(db, 'users', userId, 'conversations', String(conv.id), 'messages', String(msg.id));
-          await setDoc(msgRef, {
+          withTimeout(setDoc(msgRef, {
             id: String(msg.id),
             role: msg.role,
             content: msg.content,
@@ -252,12 +305,12 @@ export const firestoreService = {
             timestamp: msg.timestamp || new Date().toISOString(),
             ...(msg.metadata ? { metadata: msg.metadata } : {}),
             ...(msg.imageUrl ? { imageUrl: msg.imageUrl } : {}),
-          }, { merge: true });
+          }, { merge: true }), 1500).catch(() => {});
         }
       }
       return true;
     } catch (e) {
-      console.warn('[Firestore] saveConversation error:', e.message);
+      console.warn('[Firestore] saveConversation note:', e.message);
       return false;
     }
   },
@@ -266,22 +319,29 @@ export const firestoreService = {
     try {
       const msgsCol = collection(db, 'users', userId, 'conversations', String(convId), 'messages');
       const q = query(msgsCol, orderBy('timestamp', 'asc'));
-      const snap = await getDocs(q);
+      const snap = await withTimeout(getDocs(q), 1500);
       const msgs = [];
       snap.forEach((d) => {
         msgs.push({ id: d.id, ...d.data() });
       });
+      if (msgs.length > 0) {
+        setLocalData('msgs_' + userId + '_' + convId, msgs);
+      }
       return msgs;
     } catch (e) {
-      console.warn('[Firestore] getMessages error:', e.message);
-      return [];
+      console.warn('[Firestore] getMessages note:', e.message);
+      return getLocalData('msgs_' + userId + '_' + convId, []);
     }
   },
 
   async saveMessage(userId, convId, message) {
     try {
+      const currentMsgs = getLocalData('msgs_' + userId + '_' + convId, []);
+      currentMsgs.push(message);
+      setLocalData('msgs_' + userId + '_' + convId, currentMsgs);
+
       const msgRef = doc(db, 'users', userId, 'conversations', String(convId), 'messages', String(message.id));
-      await setDoc(msgRef, {
+      withTimeout(setDoc(msgRef, {
         id: String(message.id),
         role: message.role,
         content: message.content,
@@ -289,37 +349,51 @@ export const firestoreService = {
         timestamp: message.timestamp || new Date().toISOString(),
         ...(message.metadata ? { metadata: message.metadata } : {}),
         ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}),
-      }, { merge: true });
+      }, { merge: true }), 1500).catch(() => {});
 
-      // Touch parent conversation updatedAt
       const convRef = doc(db, 'users', userId, 'conversations', String(convId));
-      await setDoc(convRef, { updatedAt: new Date().toISOString() }, { merge: true });
+      withTimeout(setDoc(convRef, { updatedAt: new Date().toISOString() }, { merge: true }), 1500).catch(() => {});
       return true;
     } catch (e) {
-      console.warn('[Firestore] saveMessage error:', e.message);
+      console.warn('[Firestore] saveMessage note:', e.message);
       return false;
     }
   },
 
   async deleteConversation(userId, convId) {
     try {
-      await deleteDoc(doc(db, 'users', userId, 'conversations', String(convId)));
+      const currentConvs = getLocalData('convs_' + userId, []);
+      const updated = currentConvs.filter((c) => String(c.id) !== String(convId));
+      setLocalData('convs_' + userId, updated);
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_PREFIX + 'msgs_' + userId + '_' + convId);
+      } catch {}
+
+      withTimeout(deleteDoc(doc(db, 'users', userId, 'conversations', String(convId))), 1500).catch(() => {});
       return true;
     } catch (e) {
-      console.warn('[Firestore] deleteConversation error:', e.message);
+      console.warn('[Firestore] deleteConversation note:', e.message);
       return false;
     }
   },
 
   async updateConversationTitle(userId, convId, title) {
     try {
-      await setDoc(doc(db, 'users', userId, 'conversations', String(convId)), {
+      const currentConvs = getLocalData('convs_' + userId, []);
+      const match = currentConvs.find((c) => String(c.id) === String(convId));
+      if (match) {
+        match.title = title;
+        match.updatedAt = new Date().toISOString();
+        setLocalData('convs_' + userId, currentConvs);
+      }
+
+      withTimeout(setDoc(doc(db, 'users', userId, 'conversations', String(convId)), {
         title,
         updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      }, { merge: true }), 1500).catch(() => {});
       return true;
     } catch (e) {
-      console.warn('[Firestore] updateConversationTitle error:', e.message);
+      console.warn('[Firestore] updateConversationTitle note:', e.message);
       return false;
     }
   },
@@ -347,7 +421,7 @@ export const firestoreService = {
         streakDays: dates.size > 0 ? Math.min(dates.size, 7) : 0,
       };
     } catch (e) {
-      console.warn('[Firestore] getUserStats error:', e.message);
+      console.warn('[Firestore] getUserStats note:', e.message);
       return { questionsAsked: 0, subjectsExplored: 0, streakDays: 0 };
     }
   },

@@ -27,9 +27,12 @@ export const ConversationModel = {
   },
 
   async findById(id) {
+    if (!id || isNaN(Number(id)) || Number(id) <= 0 || Number(id) >= 2147483647) {
+      return null;
+    }
     const res = await query(
       `SELECT id, user_id, title, created_at FROM conversations WHERE id = $1`,
-      [id]
+      [Number(id)]
     );
     return res.rows[0];
   },

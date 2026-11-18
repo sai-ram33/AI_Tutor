@@ -15,8 +15,8 @@ export const authController = {
         return res.status(400).json({ error: 'Name, email, and password are required.' });
       }
 
-      if (password.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
       }
 
       const existing = await UserModel.findByEmail(email);

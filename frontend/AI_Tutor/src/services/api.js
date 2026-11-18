@@ -101,13 +101,19 @@ class ApiService {
       ...options.headers,
     };
 
+    const controller = new AbortController();
+    const timeoutMs = options.timeout || 60000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     const config = {
       ...options,
       headers,
+      signal: options.signal || controller.signal,
     };
 
     try {
       const response = await fetch(url, config);
+      clearTimeout(timeoutId);
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
@@ -121,6 +127,7 @@ class ApiService {
 
       return data;
     } catch (err) {
+      clearTimeout(timeoutId);
       // Backend might be offline or Postgres error
       console.warn(`[API Request Error] ${endpoint}:`, err.message);
       throw err;
@@ -136,15 +143,14 @@ class ApiService {
     if (token) this.setToken(token);
     if (user) this.setStoredUser(user);
 
-    // 2. Sync to PostgreSQL if backend is available
-    try {
-      await this.request('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({ name, email, password, level, language }),
-      });
-    } catch (err) {
-      console.info('ℹ️ PostgreSQL unavailable. Stored account in Firebase Auth & Firestore.');
-    }
+    // 2. Sync to PostgreSQL in background without blocking the user interface
+    this.request('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password, level, language }),
+      timeout: 3000,
+    }).catch(() => {
+      console.info('ℹ️ PostgreSQL unavailable. Account saved via Firebase Auth.');
+    });
 
     return { user, token };
   }
@@ -157,15 +163,14 @@ class ApiService {
     if (token) this.setToken(token);
     if (user) this.setStoredUser(user);
 
-    // 2. Sync / verify session with backend if available
-    try {
-      await this.request('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-    } catch (err) {
+    // 2. Sync / verify session with backend in background
+    this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+      timeout: 3000,
+    }).catch(() => {
       console.info('ℹ️ PostgreSQL unavailable. Authenticated via Firebase Auth.');
-    }
+    });
 
     return { user, token };
   }
@@ -178,15 +183,14 @@ class ApiService {
     if (token) this.setToken(token);
     if (user) this.setStoredUser(user);
 
-    // 2. Sync to PostgreSQL if backend is available
-    try {
-      await this.request('/auth/google', {
-        method: 'POST',
-        body: JSON.stringify({ idToken: token }),
-      });
-    } catch (err) {
+    // 2. Sync to PostgreSQL in background
+    this.request('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken: token }),
+      timeout: 3000,
+    }).catch(() => {
       console.info('ℹ️ PostgreSQL unavailable. Authenticated via Firebase Google Sign-in.');
-    }
+    });
 
     return { user, token };
   }

@@ -16,20 +16,31 @@ export const chatController = {
         return res.status(400).json({ error: 'Message content is required.' });
       }
 
-      let convId = conversationId || Date.now();
+      let convId = 1;
       let history = [];
-      let userMessage = { role: 'user', content: message.trim(), mode };
+      let userMessage = { id: Date.now(), role: 'user', content: message.trim(), mode };
       let userLevel = 'beginner';
 
       try {
-        // 1. Verify or create conversation
-        if (conversationId) {
-          const existingConv = await ConversationModel.findById(conversationId);
+        // 1. Verify or create conversation in PostgreSQL
+        const isNumericId = conversationId && !isNaN(Number(conversationId)) && Number(conversationId) > 0 && Number(conversationId) < 2147483647;
+        if (isNumericId) {
+          const existingConv = await ConversationModel.findById(Number(conversationId));
           if (existingConv && existingConv.user_id !== req.user?.userId) {
             return res.status(403).json({ error: 'You do not have permission to access this conversation.' });
           }
+          if (existingConv) {
+            convId = existingConv.id;
+          } else {
+            const title = message.trim().slice(0, 40);
+            const newConv = await ConversationModel.create({
+              userId: req.user?.userId || 1,
+              title,
+            });
+            convId = newConv.id;
+          }
         } else {
-          // Auto-create new conversation
+          // Auto-create new conversation with integer ID
           const title = message.trim().slice(0, 40);
           const newConv = await ConversationModel.create({
             userId: req.user?.userId || 1,
@@ -55,7 +66,7 @@ export const chatController = {
           if (user) userLevel = user.level || 'beginner';
         }
       } catch (dbErr) {
-        console.warn('Database unavailable, skipping DB reads/writes for user message:', dbErr.message);
+        console.warn('Database note, continuing pedagogical flow:', dbErr.message);
       }
 
       // 5. Generate AI pedagogical response via Mistral
@@ -70,17 +81,18 @@ export const chatController = {
       const responseContent = typeof aiResult === 'string' ? aiResult : aiResult.content;
       const suggestedNextPrompt = typeof aiResult === 'object' ? aiResult.suggestedNextPrompt : null;
 
-      // 6. Save AI message to database (or mock if DB offline)
-      let aiMessage = { role: 'ai', content: responseContent, mode };
+      // 6. Save AI message to database
+      let aiMessage = { id: Date.now() + 1, role: 'ai', content: responseContent, mode };
       try {
-        aiMessage = await MessageModel.create({
+        const savedAiMessage = await MessageModel.create({
           conversationId: convId,
           role: 'ai',
           content: responseContent,
           mode,
         });
+        if (savedAiMessage) aiMessage = savedAiMessage;
       } catch (dbErr) {
-        console.warn('Database unavailable, skipping DB write for AI message:', dbErr.message);
+        console.warn('Database note, saving in-memory AI message:', dbErr.message);
       }
 
       res.status(201).json({

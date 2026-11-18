@@ -47,9 +47,12 @@ export const UserModel = {
   },
 
   async findById(id) {
+    if (!id || isNaN(Number(id)) || Number(id) <= 0 || Number(id) >= 2147483647) {
+      return null;
+    }
     const res = await query(
       `SELECT id, name, email, level, language, created_at FROM users WHERE id = $1`,
-      [id]
+      [Number(id)]
     );
     return res.rows[0];
   },

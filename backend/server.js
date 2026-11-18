@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/env.js';
-import { initDb, query } from './config/db.js';
+import { initDb } from './config/db.js';
+import healthRoutes from './routes/healthRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import conversationRoutes from './routes/conversationRoutes.js';
@@ -15,32 +16,14 @@ const app = express();
 // Middlewares
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json({ limit: '5mb' }));
 
-// Healthcheck
-app.get('/api/health', async (req, res) => {
-  let databaseStatus = 'disconnected';
-  try {
-    const dbCheck = await query('SELECT 1');
-    if (dbCheck && dbCheck.rowCount > 0) {
-      databaseStatus = 'connected';
-    }
-  } catch (err) {
-    databaseStatus = 'error';
-  }
-
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    service: 'AI Teacher API',
-    database: databaseStatus,
-    version: '2.0.0',
-  });
-});
+// Healthcheck (optimized for cron jobs & uptime monitoring)
+app.use('/api/health', healthRoutes);
 
 // API Routes
 app.use('/api/auth', authRoutes);

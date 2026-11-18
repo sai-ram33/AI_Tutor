@@ -222,7 +222,7 @@ CRITICAL: At the very end of your response, on a new line, provide a single rele
     let content = rawContent;
     let suggestedNextPrompt = 'What would you like to explore next?';
 
-    const promptRegex = /<<<NEXT_PROMPT:\s*([\s\S]*?)>>>/i;
+    const promptRegex = /<<<NEXT_PROMPT:\s*([\s\S]*?)(?:>>>|>>|>|$)/i;
     const match = content.match(promptRegex);
 
     if (match) {
