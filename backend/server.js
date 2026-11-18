@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config/env.js';
 import { initDb } from './config/db.js';
 import healthRoutes from './routes/healthRoutes.js';
+import { healthController } from './controllers/healthController.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import conversationRoutes from './routes/conversationRoutes.js';
@@ -22,8 +23,11 @@ app.use(cors({
 
 app.use(express.json({ limit: '5mb' }));
 
-// Healthcheck (optimized for cron jobs & uptime monitoring)
+// Healthcheck (supports /, /health, and /api/health for cron jobs & uptime monitoring)
 app.use('/api/health', healthRoutes);
+app.use('/health', healthRoutes);
+app.get('/', healthController.checkHealth);
+app.head('/', healthController.checkHealth);
 
 // API Routes
 app.use('/api/auth', authRoutes);
