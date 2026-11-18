@@ -8,7 +8,10 @@ import {
   firestoreService,
 } from './firebase';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api')
+  .trim()
+  .replace(/\/+$/, '');
+const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 const TOKEN_KEY = 'ai_tutor_auth_token';
 const USER_KEY = 'ai_tutor_user_profile';
 
@@ -129,7 +132,7 @@ class ApiService {
     } catch (err) {
       clearTimeout(timeoutId);
       // Backend might be offline or Postgres error
-      console.warn(`[API Request Error] ${endpoint}:`, err.message);
+      console.warn(`[API Request Error] ${url}:`, err.message);
       throw err;
     }
   }
